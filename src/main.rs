@@ -1,9 +1,9 @@
 use clap::Parser;
 use client::Client;
 use std::{io::Result, sync::Arc};
+use tokio::time::Instant;
 
-use crate::args::Args;
-use crate::ball::Ball;
+use crate::{args::Args, ball::Ball};
 
 mod args;
 mod ball;
@@ -18,6 +18,14 @@ async fn main() -> Result<()> {
 
     let mut client = Client::new(&args.server_address).await?;
     let (screen_width, screen_height) = client.get_screen_size().await.unwrap();
+
+    for _ in 0..5 {
+        let start = Instant::now();
+        client
+            .get_screen_rect(0, 0, 100, 100, screen_width, screen_height)
+            .await?;
+        dbg!(start.elapsed());
+    }
 
     let ball = Arc::new(Ball::new(screen_width, screen_height).await?);
 

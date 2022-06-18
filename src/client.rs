@@ -1,6 +1,7 @@
+use core::panic;
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::io::Result;
+use std::{io::Result, vec};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufStream},
     net::TcpStream,
@@ -55,24 +56,44 @@ impl Client {
             let mut buffer = String::new();
             self.stream.read_line(&mut buffer).await?;
 
-            if let Some(matches) = READ_PIXEL_COMMAND_REGEX.captures(&buffer) {
-                let x = matches[1]
-                    .parse::<u16>()
-                    .expect("Failed to parse x coordinate, received malformed data");
-                let y = matches[2]
-                    .parse::<u16>()
-                    .expect("Failed to parse y coordinate, received malformed data");
-                if let Ok(rgb) = u32::from_str_radix(matches.get(3).unwrap().as_str(), 16) {
+            let mut parts = buffer.split(' ');
+            match parts.next() {
+                Some("PX") => {
+                    let x = parts
+                        .next()
+                        .expect("invalid PX response - missing x coordinate")
+                        .parse::<u16>()
+                        .unwrap();
+                    let y = parts
+                        .next()
+                        .expect("invalid PX response - missing y coordinate")
+                        .parse::<u16>()
+                        .unwrap();
+                    let rgb = u32::from_str_radix(
+                        parts
+                            .next()
+                            .expect("invalid PX response - missing rgb color")
+                            .trim_end_matches('\n'),
+                        16,
+                    )
+                    .unwrap();
                     result.push(PixelflutResponse::Pixel { x, y, rgb });
                 }
-            } else if let Some(matches) = SIZE_COMMAND_REGEX.captures(&buffer) {
-                let width = matches[1]
-                    .parse::<u16>()
-                    .expect("Failed to parse screen width, received malformed data");
-                let height = matches[2]
-                    .parse::<u16>()
-                    .expect("Failed to parse screen height, received malformed data");
-                result.push(PixelflutResponse::Size { width, height });
+                Some("SIZE") => {
+                    let width = parts
+                        .next()
+                        .expect("invalid SIZE response - missing width")
+                        .parse::<u16>()
+                        .unwrap();
+                    let height = parts
+                        .next()
+                        .expect("invalid SIZE response - missing height")
+                        .trim_end_matches('\n')
+                        .parse::<u16>()
+                        .unwrap();
+                    result.push(PixelflutResponse::Size { width, height });
+                }
+                None | Some(_) => panic!("Could not read response {buffer:?}"),
             }
         }
 
@@ -89,5 +110,38 @@ impl Client {
         } else {
             panic!("Expected to get the size of the screen, but got {response:?}")
         }
+    }
+
+    pub async fn get_screen_rect(
+        &mut self,
+        x_offset: u16,
+        y_offset: u16,
+        width: u16,
+        height: u16,
+        screen_width: u16,
+        screen_height: u16,
+    ) -> Result<Vec<Vec<u32>>> {
+        let mut read_commands = Vec::with_capacity(width as usize * height as usize);
+        for x in x_offset..x_offset + width {
+            for y in y_offset..y_offset + height {
+                if x < screen_width && y < screen_height {
+                    read_commands.push(PixelflutRequest::GetPixel { x, y });
+                }
+            }
+        }
+        self.write_commands(&read_commands).await?;
+
+        let mut result = vec![vec![0x1234_u32; height as usize]; width as usize];
+        let responses = self.read_commands(read_commands.len()).await?;
+        for response in responses {
+            match response {
+                PixelflutResponse::Pixel { x, y, rgb } => {
+                    result[x as usize][y as usize] = rgb;
+                }
+                _ => panic!("Expected to get the color of a pixel, but got {response:?}"),
+            }
+        }
+
+        Ok(result)
     }
 }
