@@ -112,31 +112,36 @@ impl Client {
         }
     }
 
+    /// `x_offset` and `y_offset` are allowed to be negative or too high, so that the screen bounds are exceeded.
+    /// This function will handle that cases and fill the returned rectangle with 0s if they are out of bounds
     pub async fn get_screen_rect(
         &mut self,
-        x_offset: u16,
-        y_offset: u16,
+        x_offset: i16,
+        y_offset: i16,
         width: u16,
         height: u16,
         screen_width: u16,
         screen_height: u16,
     ) -> Result<Vec<Vec<u32>>> {
         let mut read_commands = Vec::with_capacity(width as usize * height as usize);
-        for x in x_offset..x_offset + width {
-            for y in y_offset..y_offset + height {
-                if x < screen_width && y < screen_height {
-                    read_commands.push(PixelflutRequest::GetPixel { x, y });
+        for x in x_offset..x_offset + width as i16 {
+            for y in y_offset..y_offset + height as i16 {
+                if x >= 0 && x < screen_width as i16 && y >= 0 && y < screen_height as i16 {
+                    read_commands.push(PixelflutRequest::GetPixel {
+                        x: x as u16,
+                        y: y as u16,
+                    });
                 }
             }
         }
         self.write_commands(&read_commands).await?;
 
-        let mut result = vec![vec![0x1234_u32; height as usize]; width as usize];
+        let mut result = vec![vec![0_u32; height as usize]; width as usize];
         let responses = self.read_commands(read_commands.len()).await?;
         for response in responses {
             match response {
                 PixelflutResponse::Pixel { x, y, rgb } => {
-                    result[x as usize][y as usize] = rgb;
+                    result[(x as i16 - x_offset) as usize][(y as i16 - y_offset) as usize] = rgb;
                 }
                 _ => panic!("Expected to get the color of a pixel, but got {response:?}"),
             }
