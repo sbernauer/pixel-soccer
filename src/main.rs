@@ -1,8 +1,11 @@
+use clap::Parser;
 use client::Client;
 use std::{io::Result, sync::Arc};
 
+use crate::args::Args;
 use crate::ball::Ball;
 
+mod args;
 mod ball;
 mod client;
 mod draw;
@@ -11,18 +14,18 @@ mod protocol;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut client = Client::new("127.0.0.1:1234").await?;
+    let args = Args::parse();
 
+    let mut client = Client::new(&args.server_address).await?;
     let (screen_width, screen_height) = client.get_screen_size().await.unwrap();
-    dbg!(screen_width);
-    dbg!(screen_height);
 
     let ball = Arc::new(Ball::new(screen_width, screen_height).await?);
-    let ball_update_thread = ball::start_update_thread(Arc::clone(&ball), 30);
-    let ball_draw_thread =
-        ball::start_draw_thread(Arc::clone(&ball), Client::new("127.0.0.1:1234").await?);
 
-    ball_update_thread.await?;
-    ball_draw_thread.await??;
+    let mut threads = vec![ball::start_update_thread(Arc::clone(&ball), 30)];
+    threads.extend(draw::start_drawing(ball, &args.server_address, 1).await);
+
+    for thread in threads {
+        thread.await?;
+    }
     Ok(())
 }
