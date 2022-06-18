@@ -1,9 +1,12 @@
 use client::Client;
 use std::io::Result;
 
-use crate::protocol::PixelflutRequest;
+use crate::{ball::Ball, draw::Draw};
 
+mod ball;
 mod client;
+mod draw;
+mod image_helpers;
 mod protocol;
 
 #[tokio::main]
@@ -14,18 +17,8 @@ async fn main() -> Result<()> {
     dbg!(screen_width);
     dbg!(screen_height);
 
-    client
-        .write_commands(&vec![
-            PixelflutRequest::SetPixel {
-                x: 0,
-                y: 0,
-                rgb: 0xabcdef,
-            },
-            PixelflutRequest::GetPixel { x: 0, y: 0 },
-        ])
-        .await?;
-    let get_pixel_response = client.read_commands(1).await?;
-    dbg!(get_pixel_response);
+    let ball = Ball::new(screen_width, screen_height).await?;
+    ball.draw(&mut client).await?;
 
     Ok(())
 }

@@ -8,6 +8,8 @@ use tokio::{
 
 use crate::protocol::{PixelflutRequest, PixelflutResponse, Serialize};
 
+pub const AVG_BYES_PER_PIXEL_SET_COMMAND: usize = "PX 123 123 ffffff\n".len();
+
 lazy_static! {
     // Thanks to https://github.com/timvisee/pixelpwnr/blob/0d83b3e0b54448a59844e330a36f2e4b0e19e611/src/pix/client.rs#L19
     pub static ref SIZE_COMMAND_REGEX: Regex = Regex::new(r"^(?i)\s*SIZE\s+([[:digit:]]+)\s+([[:digit:]]+)\s*$").unwrap();
