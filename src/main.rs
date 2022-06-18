@@ -1,7 +1,7 @@
 use client::Client;
-use std::io::Result;
+use std::{io::Result, sync::Arc};
 
-use crate::{ball::Ball, draw::Draw};
+use crate::ball::Ball;
 
 mod ball;
 mod client;
@@ -17,8 +17,12 @@ async fn main() -> Result<()> {
     dbg!(screen_width);
     dbg!(screen_height);
 
-    let ball = Ball::new(screen_width, screen_height).await?;
-    ball.draw(&mut client).await?;
+    let ball = Arc::new(Ball::new(screen_width, screen_height).await?);
+    let ball_update_thread = ball::start_update_thread(Arc::clone(&ball), 30);
+    let ball_draw_thread =
+        ball::start_draw_thread(Arc::clone(&ball), Client::new("127.0.0.1:1234").await?);
 
+    ball_update_thread.await?;
+    ball_draw_thread.await??;
     Ok(())
 }
