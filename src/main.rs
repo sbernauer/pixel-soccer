@@ -20,11 +20,7 @@ async fn main() -> Result<()> {
 
     let ball = Arc::new(Ball::new(screen_width, screen_height).await?);
 
-    let mut threads = vec![ball::start_update_thread(
-        Arc::clone(&ball),
-        Client::new(&args.server_address).await?,
-        30,
-    )];
+    let mut threads = vec![ball::start_update_thread(Arc::clone(&ball), client, 30)];
     threads.extend(draw::start_drawing(ball, &args.server_address, 1).await);
 
     for thread in threads {

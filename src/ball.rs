@@ -23,13 +23,15 @@ use crate::{
     protocol::Serialize,
 };
 
-const SPEED: f32 = 10.0_f32;
-const LOOK_RADIUS: u16 = 46; // ca. BALL_RADIUS + SPEED / 2.0 + 1
-
 const TARGET_COLOR: u32 = 0x00ff0000; // red
 
-// Measure the following variables with an Image editing program
-const BALL_IMAGE_SIZE: u16 = 80; // Assuming quadratic image the width and height of the image
+// ####################
+// Be careful about changing any of these constants below!
+// They can change the way the ball behaves, in the worst case letting it glitch through walls or bounce in the wrong direction
+// ####################
+const SPEED: f32 = 10.0_f32;
+// Measure the following variables with an image editing program
+const BALL_IMAGE_SIZE: u16 = 80; // Assuming quadratic image this is the width and height of the image
 const BALL_RADIUS: f32 = 40_f32;
 
 pub struct Ball {
@@ -87,6 +89,7 @@ impl Ball {
         let mut movement_y = SPEED * self.dir.load(Acquire).sin();
 
         let mut bounced_with_edge = false;
+
         // Collision on left or right
         if center_x - BALL_RADIUS <= 0_f32 || center_x + BALL_RADIUS >= self.screen_width as f32 {
             movement_x *= -1_f32;
@@ -99,13 +102,15 @@ impl Ball {
             bounced_with_edge = true;
         }
 
-        // Ask for a rect with the ball in the center
-        let rect = client
-            .get_screen_rect(
-                center_x as i16 - LOOK_RADIUS as i16,
-                center_y as i16 - LOOK_RADIUS as i16,
-                2 * LOOK_RADIUS,
-                2 * LOOK_RADIUS,
+        let inner_circle_radius = BALL_RADIUS - SPEED / 2.0;
+        let outer_circle_radius = BALL_RADIUS + SPEED / 2.0;
+
+        let donut = client
+            .get_screen_donut(
+                center_x as i16,
+                center_y as i16,
+                inner_circle_radius,
+                outer_circle_radius,
                 self.screen_width,
                 self.screen_height,
             )
@@ -116,13 +121,12 @@ impl Ball {
         let mut min_y_value = 0.0;
         let mut min_distance = f32::MAX;
 
-        #[allow(clippy::needless_range_loop)]
-        for x in 0..2 * LOOK_RADIUS as usize {
-            for y in 0..2 * LOOK_RADIUS as usize {
-                if rect[x][y] == TARGET_COLOR {
+        for x in 0..donut.len() {
+            for y in 0..donut[0].len() {
+                if donut[x][y] == TARGET_COLOR {
                     contains_red = true;
-                    let x_rel = x as f32 - LOOK_RADIUS as f32;
-                    let y_rel = y as f32 - LOOK_RADIUS as f32;
+                    let x_rel = x as f32 - outer_circle_radius;
+                    let y_rel = y as f32 - outer_circle_radius;
                     let distance = f32::sqrt(f32::powi(x_rel, 2) + f32::powi(y_rel, 2));
                     if distance < min_distance {
                         min_distance = distance;

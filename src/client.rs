@@ -113,7 +113,8 @@ impl Client {
     }
 
     /// `x_offset` and `y_offset` are allowed to be negative or too high, so that the screen bounds are exceeded.
-    /// This function will handle that cases and fill the returned rectangle with 0s if they are out of bounds
+    /// This function will handle that cases and fill the returned rectangle with 0s if they are out of bounds.
+    #[allow(dead_code)]
     pub async fn get_screen_rect(
         &mut self,
         x_offset: i16,
@@ -142,6 +143,54 @@ impl Client {
             match response {
                 PixelflutResponse::Pixel { x, y, rgb } => {
                     result[(x as i16 - x_offset) as usize][(y as i16 - y_offset) as usize] = rgb;
+                }
+                _ => panic!("Expected to get the color of a pixel, but got {response:?}"),
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// `x_center` and `y_center` are allowed to be negative or too high, so that the screen bounds are exceeded.
+    /// This function will handle that cases and fill the returned rectangle with 0s if they are out of bounds.
+    /// Also all parts of the returned rect that are not part of the requested donut will be 0s.
+    pub async fn get_screen_donut(
+        &mut self,
+        x_center: i16,
+        y_center: i16,
+        inner_circle_radius: f32,
+        outer_circle_radius: f32,
+        screen_width: u16,
+        screen_height: u16,
+    ) -> Result<Vec<Vec<u32>>> {
+        let mut read_commands = Vec::new();
+        for x in x_center - outer_circle_radius as i16..x_center + outer_circle_radius as i16 {
+            for y in y_center - outer_circle_radius as i16..y_center + outer_circle_radius as i16 {
+                if x >= 0 && x < screen_width as i16 && y >= 0 && y < screen_height as i16 {
+                    let x_rel = (x - x_center) as f32;
+                    let y_rel = (y - y_center) as f32;
+                    let distance = f32::sqrt(f32::powi(x_rel, 2) + f32::powi(y_rel, 2));
+
+                    if distance >= inner_circle_radius && distance <= outer_circle_radius {
+                        read_commands.push(PixelflutRequest::GetPixel {
+                            x: x as u16,
+                            y: y as u16,
+                        });
+                    }
+                }
+            }
+        }
+
+        self.write_commands(&read_commands).await?;
+
+        let mut result =
+            vec![vec![0_u32; 2 * outer_circle_radius as usize]; 2 * outer_circle_radius as usize];
+        let responses = self.read_commands(read_commands.len()).await?;
+        for response in responses {
+            match response {
+                PixelflutResponse::Pixel { x, y, rgb } => {
+                    result[(x as i16 - x_center + outer_circle_radius as i16) as usize]
+                        [(y as i16 - y_center + outer_circle_radius as i16) as usize] = rgb;
                 }
                 _ => panic!("Expected to get the color of a pixel, but got {response:?}"),
             }
