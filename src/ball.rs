@@ -10,7 +10,11 @@ use std::{
     },
     time::Duration,
 };
-use tokio::{sync::RwLock, task::JoinHandle, time};
+use tokio::{
+    sync::RwLock,
+    task::JoinHandle,
+    time::{self, Instant},
+};
 
 use crate::{
     client::{Client, AVG_BYES_PER_PIXEL_SET_COMMAND},
@@ -169,13 +173,27 @@ impl Draw for Ball {
 }
 
 pub fn start_update_thread(ball: Arc<Ball>, mut client: Client, target_fps: u64) -> JoinHandle<()> {
+    let mut fps_counter_last_update = Instant::now();
+    let mut fps_counter = 0;
+
+    let mut interval = time::interval(Duration::from_millis(1_000 / target_fps));
+    interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
+
     tokio::spawn(async move {
-        let mut interval = time::interval(Duration::from_millis(1_000 / target_fps));
         loop {
+            interval.tick().await;
+
             // let start = Instant::now();
             ball.tick(&mut client).await.unwrap();
             // println!("Took {:?} to tick the ball", start.elapsed());
-            interval.tick().await;
+
+            if fps_counter_last_update.elapsed() >= Duration::from_secs(1) {
+                println!("{} fps", fps_counter);
+                fps_counter = 0;
+                fps_counter_last_update = Instant::now();
+            } else {
+                fps_counter += 1;
+            }
         }
     })
 }

@@ -23,7 +23,7 @@ async fn main() -> Result<()> {
     let mut threads = vec![ball::start_update_thread(
         Arc::clone(&ball),
         Client::new(&args.server_address).await?,
-        20,
+        30,
     )];
     threads.extend(draw::start_drawing(ball, &args.server_address, 1).await);
 

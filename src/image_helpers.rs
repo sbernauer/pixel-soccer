@@ -2,6 +2,7 @@ use crate::protocol::PixelflutRequest;
 
 use image::{DynamicImage, GenericImageView};
 
+#[allow(dead_code)]
 pub fn draw_rect(
     x_offset: u16,
     y_offset: u16,
