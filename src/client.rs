@@ -8,7 +8,10 @@ use tokio::{
     net::TcpStream,
 };
 
-use crate::{protocol::{PixelflutRequest, PixelflutResponse, Serialize}, ball::TARGET_COLOR};
+use crate::{
+    ball::TARGET_COLOR,
+    protocol::{PixelflutRequest, PixelflutResponse, Serialize},
+};
 
 pub const AVG_BYES_PER_PIXEL_SET_COMMAND: usize = "PX 123 123 ffffff\n".len();
 
