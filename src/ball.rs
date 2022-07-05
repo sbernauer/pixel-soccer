@@ -23,7 +23,7 @@ use crate::{
     protocol::Serialize,
 };
 
-const TARGET_COLOR: u32 = 0x00ff0000; // red
+pub const TARGET_COLOR: u32 = 0x00ff_0000; // red
 
 // ####################
 // Be careful about changing any of these constants below!
@@ -37,6 +37,8 @@ const BALL_RADIUS: f32 = 40_f32;
 pub struct Ball {
     image: DynamicImage,
     draw_command_bytes: RwLock<Vec<u8>>,
+
+    field_hitbox_image: DynamicImage,
 
     center_x: AtomicF32,
     center_y: AtomicF32,
@@ -52,9 +54,14 @@ impl Ball {
             .decode()
             .expect("Failed to decode ball image");
 
+        let field_hitbox_image = ImageReader::open("images/field_v3_hitbox.png")?
+            .decode()
+            .expect("Failed to decode field hitbox image");
+
         let ball = Ball {
             image,
             draw_command_bytes: RwLock::new(vec![]),
+            field_hitbox_image,
             center_x: AtomicF32::new(((screen_width - BALL_IMAGE_SIZE) / 2) as f32),
             center_y: AtomicF32::new(((screen_height - BALL_IMAGE_SIZE) / 2) as f32),
             dir: AtomicF32::new(-PI / 0.9_f32),
@@ -113,6 +120,7 @@ impl Ball {
                 outer_circle_radius,
                 self.screen_width,
                 self.screen_height,
+                Some(&self.field_hitbox_image),
             )
             .await?;
 

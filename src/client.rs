@@ -1,4 +1,5 @@
 use core::panic;
+use image::{DynamicImage, GenericImageView};
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::{io::Result, vec};
@@ -7,7 +8,7 @@ use tokio::{
     net::TcpStream,
 };
 
-use crate::protocol::{PixelflutRequest, PixelflutResponse, Serialize};
+use crate::{protocol::{PixelflutRequest, PixelflutResponse, Serialize}, ball::TARGET_COLOR};
 
 pub const AVG_BYES_PER_PIXEL_SET_COMMAND: usize = "PX 123 123 ffffff\n".len();
 
@@ -36,12 +37,8 @@ impl Client {
     }
 
     /// Slow. For best performance use [write_bytes][Self::write_bytes]
-    pub async fn write_commands(&mut self, commands: &Vec<PixelflutRequest>) -> Result<()> {
-        let mut bytes = Vec::new();
-        for command in commands {
-            command.serialize(&mut bytes);
-        }
-
+    pub async fn write_commands(&mut self, commands: &[PixelflutRequest]) -> Result<()> {
+        let bytes = commands_to_bytes(commands);
         self.write_bytes(&bytes).await?;
 
         Ok(())
@@ -101,8 +98,7 @@ impl Client {
     }
 
     pub async fn get_screen_size(&mut self) -> Result<(u16, u16)> {
-        self.write_commands(&vec![PixelflutRequest::GetSize])
-            .await?;
+        self.write_commands(&[PixelflutRequest::GetSize]).await?;
         let response = self.read_commands(1).await?;
 
         if let Some(PixelflutResponse::Size { width, height }) = response.get(0) {
@@ -154,6 +150,8 @@ impl Client {
     /// `x_center` and `y_center` are allowed to be negative or too high, so that the screen bounds are exceeded.
     /// This function will handle that cases and fill the returned rectangle with 0s if they are out of bounds.
     /// Also all parts of the returned rect that are not part of the requested donut will be 0s.
+
+    #[allow(clippy::too_many_arguments)]
     pub async fn get_screen_donut(
         &mut self,
         x_center: i16,
@@ -162,8 +160,12 @@ impl Client {
         outer_circle_radius: f32,
         screen_width: u16,
         screen_height: u16,
+        field_hitbox: Option<&DynamicImage>,
     ) -> Result<Vec<Vec<u32>>> {
+        let mut result =
+            vec![vec![0_u32; 2 * outer_circle_radius as usize]; 2 * outer_circle_radius as usize];
         let mut read_commands = Vec::new();
+
         for x in x_center - outer_circle_radius as i16..x_center + outer_circle_radius as i16 {
             for y in y_center - outer_circle_radius as i16..y_center + outer_circle_radius as i16 {
                 if x >= 0 && x < screen_width as i16 && y >= 0 && y < screen_height as i16 {
@@ -172,6 +174,19 @@ impl Client {
                     let distance = f32::sqrt(f32::powi(x_rel, 2) + f32::powi(y_rel, 2));
 
                     if distance >= inner_circle_radius && distance <= outer_circle_radius {
+                        if let Some(field_hitbox) = field_hitbox {
+                            let value = field_hitbox.get_pixel(x as u32, y as u32).0;
+                            // When the hitbox says red their will be a collision with e.g. a goal, so we must merge that on top of the regular reading process
+                            if value[0] == 255 && value[1] == 0 && value[2] == 0 && value[3] != 0 {
+                                result
+                                    [(x as i16 - x_center + outer_circle_radius as i16) as usize]
+                                    [(y as i16 - y_center + outer_circle_radius as i16) as usize] =
+                                    TARGET_COLOR;
+                                // We already set the need value, we need to skip the regular reading of the color
+                                continue;
+                            }
+                        }
+
                         read_commands.push(PixelflutRequest::GetPixel {
                             x: x as u16,
                             y: y as u16,
@@ -183,8 +198,6 @@ impl Client {
 
         self.write_commands(&read_commands).await?;
 
-        let mut result =
-            vec![vec![0_u32; 2 * outer_circle_radius as usize]; 2 * outer_circle_radius as usize];
         let responses = self.read_commands(read_commands.len()).await?;
         for response in responses {
             match response {
@@ -198,4 +211,10 @@ impl Client {
 
         Ok(result)
     }
+}
+
+pub fn commands_to_bytes(commands: &[PixelflutRequest]) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    commands.iter().for_each(|cmd| cmd.serialize(&mut bytes));
+    bytes
 }
