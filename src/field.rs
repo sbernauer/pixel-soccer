@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use image::io::Reader as ImageReader;
+use rand::{prelude::SliceRandom, thread_rng};
 
 use crate::{
     client::{self, Client},
@@ -19,7 +20,10 @@ impl Field {
             .decode()
             .unwrap();
 
-        let draw_commands = image_helpers::draw_image(&image, 0, 0);
+        let mut draw_commands = image_helpers::draw_image(&image, 0, 0);
+
+        // Shuffle commands to prevent drawing artefacts
+        draw_commands.shuffle(&mut thread_rng());
 
         Self {
             draw_command_bytes: client::commands_to_bytes(&draw_commands),

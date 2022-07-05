@@ -11,5 +11,6 @@ atomic_float = "0.1"
 clap = { version = "3.1", features = ["derive"] }
 image = "0.24"
 lazy_static = "1.4"
+rand = "0.8.5"
 regex = "1.5"
 tokio = { version = "1.18", features = ["full"] }

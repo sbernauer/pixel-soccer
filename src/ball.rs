@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use atomic_float::AtomicF32;
 use image::{io::Reader as ImageReader, DynamicImage};
+use rand::{prelude::SliceRandom, thread_rng};
 use std::{
     f32::consts::PI,
     io::Result,
@@ -74,11 +75,15 @@ impl Ball {
     }
 
     async fn update_draw_command_bytes(&self) {
-        let draw_commands = image_helpers::draw_image(
+        let mut draw_commands = image_helpers::draw_image(
             &self.image,
             (self.center_x.load(Acquire) - BALL_RADIUS) as u16,
             (self.center_y.load(Acquire) - BALL_RADIUS) as u16,
         );
+
+        // Shuffle commands to prevent drawing artefacts
+        draw_commands.shuffle(&mut thread_rng());
+
         let mut draw_command_bytes =
             Vec::with_capacity(draw_commands.len() * AVG_BYES_PER_PIXEL_SET_COMMAND);
         draw_commands.iter().for_each(|cmd| {
