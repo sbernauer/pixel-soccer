@@ -17,7 +17,7 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     let game = Game::new(&args.server_address).await?;
-    game.start(&args.server_address).await?;
+    game.start(&args.server_address, args.fps).await?;
 
     Ok(())
 }

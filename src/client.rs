@@ -10,6 +10,7 @@ use tokio::{
 
 use crate::{
     ball::TARGET_COLOR,
+    image_helpers::get_donut_coordinates,
     protocol::{PixelflutRequest, PixelflutResponse, Serialize},
 };
 
@@ -153,7 +154,6 @@ impl Client {
     /// `x_center` and `y_center` are allowed to be negative or too high, so that the screen bounds are exceeded.
     /// This function will handle that cases and fill the returned rectangle with 0s if they are out of bounds.
     /// Also all parts of the returned rect that are not part of the requested donut will be 0s.
-
     #[allow(clippy::too_many_arguments)]
     pub async fn get_screen_donut(
         &mut self,
@@ -169,34 +169,31 @@ impl Client {
             vec![vec![0_u32; 2 * outer_circle_radius as usize]; 2 * outer_circle_radius as usize];
         let mut read_commands = Vec::new();
 
-        for x in x_center - outer_circle_radius as i16..x_center + outer_circle_radius as i16 {
-            for y in y_center - outer_circle_radius as i16..y_center + outer_circle_radius as i16 {
-                if x >= 0 && x < screen_width as i16 && y >= 0 && y < screen_height as i16 {
-                    let x_rel = (x - x_center) as f32;
-                    let y_rel = (y - y_center) as f32;
-                    let distance = f32::sqrt(f32::powi(x_rel, 2) + f32::powi(y_rel, 2));
-
-                    if distance >= inner_circle_radius && distance <= outer_circle_radius {
-                        if let Some(field_hitbox) = field_hitbox {
-                            let value = field_hitbox.get_pixel(x as u32, y as u32).0;
-                            // When the hitbox says red their will be a collision with e.g. a goal, so we must merge that on top of the regular reading process
-                            if value[0] == 255 && value[1] == 0 && value[2] == 0 && value[3] != 0 {
-                                result
-                                    [(x as i16 - x_center + outer_circle_radius as i16) as usize]
-                                    [(y as i16 - y_center + outer_circle_radius as i16) as usize] =
-                                    TARGET_COLOR;
-                                // We already set the need value, we need to skip the regular reading of the color
-                                continue;
-                            }
-                        }
-
-                        read_commands.push(PixelflutRequest::GetPixel {
-                            x: x as u16,
-                            y: y as u16,
-                        });
-                    }
+        let donut_coordinates = get_donut_coordinates(
+            x_center,
+            y_center,
+            inner_circle_radius,
+            outer_circle_radius,
+            screen_width,
+            screen_height,
+        );
+        for (x, y) in donut_coordinates {
+            if let Some(field_hitbox) = field_hitbox {
+                let value = field_hitbox.get_pixel(x as u32, y as u32).0;
+                // When the hitbox says red their will be a collision with e.g. a goal, so we must merge that on top of the regular reading process
+                if value[0] == 255 && value[1] == 0 && value[2] == 0 && value[3] != 0 {
+                    result[(x as i16 - x_center + outer_circle_radius as i16) as usize]
+                        [(y as i16 - y_center + outer_circle_radius as i16) as usize] =
+                        TARGET_COLOR;
+                    // We already set the need value, we need to skip the regular reading of the color
+                    continue;
                 }
             }
+
+            read_commands.push(PixelflutRequest::GetPixel {
+                x: x as u16,
+                y: y as u16,
+            });
         }
 
         self.write_commands(&read_commands).await?;

@@ -39,3 +39,31 @@ pub fn draw_image(image: &DynamicImage, x_offset: u16, y_offset: u16) -> Vec<Pix
 
     result
 }
+
+/// `x_center` and `y_center` are allowed to be negative or too high, so that the screen bounds are exceeded.
+/// This function will handle that cases and not include invalid coordinates.
+pub fn get_donut_coordinates(
+    x_center: i16,
+    y_center: i16,
+    inner_circle_radius: f32,
+    outer_circle_radius: f32,
+    screen_width: u16,
+    screen_height: u16,
+) -> Vec<(u16, u16)> {
+    let mut donut_coordinates = Vec::new();
+    for x in x_center - outer_circle_radius as i16..x_center + outer_circle_radius as i16 {
+        for y in y_center - outer_circle_radius as i16..y_center + outer_circle_radius as i16 {
+            if x >= 0 && x < screen_width as i16 && y >= 0 && y < screen_height as i16 {
+                let x_rel = (x - x_center) as f32;
+                let y_rel = (y - y_center) as f32;
+                let distance = f32::sqrt(f32::powi(x_rel, 2) + f32::powi(y_rel, 2));
+
+                if distance >= inner_circle_radius && distance <= outer_circle_radius {
+                    donut_coordinates.push((x as u16, y as u16));
+                }
+            }
+        }
+    }
+
+    donut_coordinates
+}

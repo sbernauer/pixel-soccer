@@ -1,26 +1,19 @@
 use async_trait::async_trait;
 use atomic_float::AtomicF32;
-use image::{io::Reader as ImageReader, DynamicImage};
-use rand::{prelude::SliceRandom, thread_rng};
+use image::{io::Reader as ImageReader, DynamicImage, GenericImageView};
+use rand::{prelude::SliceRandom, thread_rng, Rng};
 use std::{
     f32::consts::PI,
     io::Result,
-    sync::{
-        atomic::Ordering::{Acquire, Release},
-        Arc,
-    },
-    time::Duration,
+    sync::atomic::Ordering::{Acquire, Release},
 };
-use tokio::{
-    sync::RwLock,
-    task::JoinHandle,
-    time::{self, Instant},
-};
+use tokio::sync::RwLock;
 
 use crate::{
     client::{Client, AVG_BYES_PER_PIXEL_SET_COMMAND},
     draw::Draw,
-    image_helpers,
+    game::GoalScored,
+    image_helpers::{self, get_donut_coordinates},
     protocol::Serialize,
 };
 
@@ -63,12 +56,14 @@ impl Ball {
             image,
             draw_command_bytes: RwLock::new(vec![]),
             field_hitbox_image,
-            center_x: AtomicF32::new(((screen_width - BALL_IMAGE_SIZE) / 2) as f32),
-            center_y: AtomicF32::new(((screen_height - BALL_IMAGE_SIZE) / 2) as f32),
-            dir: AtomicF32::new(-PI / 0.9_f32),
+            // The following values are irrelevant as the ball will be reset after creation
+            center_x: AtomicF32::new(0.0),
+            center_y: AtomicF32::new(0.0),
+            dir: AtomicF32::new(0.0),
             screen_width,
             screen_height,
         };
+        ball.reset();
         ball.update_draw_command_bytes().await;
 
         Ok(ball)
@@ -93,7 +88,7 @@ impl Ball {
         *(self.draw_command_bytes.write().await) = draw_command_bytes;
     }
 
-    async fn tick(&self, client: &mut Client) -> Result<()> {
+    pub async fn tick(&self, client: &mut Client) -> Result<()> {
         let dir = self.dir.load(Acquire);
         let center_x = self.center_x.load(Acquire);
         let center_y = self.center_y.load(Acquire);
@@ -177,6 +172,49 @@ impl Ball {
 
         Ok(())
     }
+
+    /// Returns true if right team shot a goal, false if the left team shot a goal
+    /// and None if no goal was scored
+    pub fn is_goal_scored(&self) -> Option<GoalScored> {
+        let center_x = self.center_x.load(Acquire) as i16;
+        let center_y = self.center_y.load(Acquire) as i16;
+
+        // BALL_RADIUS - SPEED should be sufficient but better safe than sorry.
+        // This operation is way cheaper than asking for pixels over the network.
+        let inner_circle_radius = BALL_RADIUS - SPEED * 2.0;
+        let outer_circle_radius = BALL_RADIUS;
+
+        let donut_coordinates = get_donut_coordinates(
+            center_x,
+            center_y,
+            inner_circle_radius,
+            outer_circle_radius,
+            self.screen_width,
+            self.screen_height,
+        );
+
+        for (x, y) in donut_coordinates {
+            let value = self.field_hitbox_image.get_pixel(x as u32, y as u32).0;
+            if value[0] == 0 && value[1] == 0 && value[2] == 255 && value[3] != 0 {
+                if center_x > self.screen_width as i16 / 2 {
+                    return Some(GoalScored::Left);
+                } else {
+                    return Some(GoalScored::Right);
+                }
+            }
+        }
+
+        None
+    }
+
+    pub fn reset(&self) {
+        self.center_x
+            .store(((self.screen_width - BALL_IMAGE_SIZE) / 2) as f32, Release);
+        self.center_y
+            .store(((self.screen_height - BALL_IMAGE_SIZE) / 2) as f32, Release);
+        self.dir
+            .store(rand::thread_rng().gen_range(-PI..PI), Release);
+    }
 }
 
 #[async_trait]
@@ -187,30 +225,4 @@ impl Draw for Ball {
             .await?;
         Ok(())
     }
-}
-
-pub fn start_update_thread(ball: Arc<Ball>, mut client: Client, target_fps: u64) -> JoinHandle<()> {
-    let mut fps_counter_last_update = Instant::now();
-    let mut fps_counter = 0;
-
-    let mut interval = time::interval(Duration::from_millis(1_000 / target_fps));
-    interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
-
-    tokio::spawn(async move {
-        loop {
-            interval.tick().await;
-
-            // let start = Instant::now();
-            ball.tick(&mut client).await.unwrap();
-            // println!("Took {:?} to tick the ball", start.elapsed());
-
-            if fps_counter_last_update.elapsed() >= Duration::from_secs(1) {
-                println!("{} fps", fps_counter);
-                fps_counter = 0;
-                fps_counter_last_update = Instant::now();
-            } else {
-                fps_counter += 1;
-            }
-        }
-    })
 }
