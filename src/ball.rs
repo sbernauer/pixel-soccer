@@ -13,11 +13,11 @@ use crate::{
     client::{Client, AVG_BYES_PER_PIXEL_SET_COMMAND},
     draw::Draw,
     game::GoalScored,
-    image_helpers::{self, get_donut_coordinates},
+    image_helpers::{self, get_donut_coordinates, RED},
     protocol::Serialize,
 };
 
-pub const TARGET_COLOR: u32 = 0x00ff_0000; // red
+pub const TARGET_COLOR: u32 = RED;
 
 // ####################
 // Be careful about changing any of these constants below!
@@ -197,9 +197,9 @@ impl Ball {
             let value = self.field_hitbox_image.get_pixel(x as u32, y as u32).0;
             if value[0] == 0 && value[1] == 0 && value[2] == 255 && value[3] != 0 {
                 if center_x > self.screen_width as i16 / 2 {
-                    return Some(GoalScored::Left);
-                } else {
                     return Some(GoalScored::Right);
+                } else {
+                    return Some(GoalScored::Left);
                 }
             }
         }

@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use crate::{ball::Ball, client::Client, draw, field::Field};
+use crate::{ball::Ball, client::Client, draw, field::Field, score::Score};
 use tokio::{
     io::Result,
     time::{self, Instant},
@@ -10,9 +10,7 @@ pub struct Game {
     client: Client,
     field: Field,
     ball: Ball,
-
-    goals_left: usize,
-    goals_right: usize,
+    score: Score,
 }
 
 pub enum GoalScored {
@@ -26,14 +24,12 @@ impl Game {
         let (screen_width, screen_height) = client.get_screen_size().await.unwrap();
 
         let ball = Ball::new(screen_width, screen_height).await?;
-        let field = Field::new();
 
         Ok(Game {
             client,
-            field,
+            field: Field::new(),
             ball,
-            goals_left: 0,
-            goals_right: 0,
+            score: Score::new().await,
         })
     }
 
@@ -41,6 +37,8 @@ impl Game {
         let ball = Arc::new(self.ball);
         let ball_2 = Arc::clone(&ball);
         let field = Arc::new(self.field);
+        let score = Arc::new(self.score);
+        let score_2 = Arc::clone(&score);
 
         let mut threads = Vec::new();
 
@@ -58,17 +56,12 @@ impl Game {
                 // println!("Took {:?} to tick the ball", start.elapsed());
 
                 if let Some(goal) = ball.is_goal_scored() {
-                    match goal {
-                        GoalScored::Left => self.goals_left += 1,
-                        GoalScored::Right => self.goals_right += 1,
-                    }
-
+                    score.score_goal(goal).await;
                     ball.reset();
                 }
 
                 if fps_counter_last_update.elapsed() >= Duration::from_secs(1) {
                     println!("{} fps", fps_counter);
-                    println!("{} vs {} points", self.goals_left, self.goals_right);
                     fps_counter = 0;
                     fps_counter_last_update = Instant::now();
                 } else {
@@ -79,6 +72,7 @@ impl Game {
 
         threads.extend(draw::start_drawing(ball_2, server_address, 1).await);
         threads.extend(draw::start_drawing(field, server_address, 1).await);
+        threads.extend(draw::start_drawing(score_2, server_address, 1).await);
 
         for thread in threads {
             thread.await?;

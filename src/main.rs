@@ -11,6 +11,7 @@ mod field;
 mod game;
 mod image_helpers;
 mod protocol;
+mod score;
 
 #[tokio::main]
 async fn main() -> Result<()> {
