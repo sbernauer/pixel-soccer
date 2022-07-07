@@ -124,7 +124,7 @@ impl Ball {
             )
             .await?;
 
-        let mut contains_red = false;
+        let mut contains_target_color = false;
         let mut min_x_value = 0.0;
         let mut min_y_value = 0.0;
         let mut min_distance = f32::MAX;
@@ -132,7 +132,7 @@ impl Ball {
         for x in 0..donut.len() {
             for y in 0..donut[0].len() {
                 if donut[x][y] == TARGET_COLOR {
-                    contains_red = true;
+                    contains_target_color = true;
                     let x_rel = x as f32 - outer_circle_radius;
                     let y_rel = y as f32 - outer_circle_radius;
                     let distance = f32::sqrt(f32::powi(x_rel, 2) + f32::powi(y_rel, 2));
@@ -146,7 +146,7 @@ impl Ball {
         }
 
         if !bounced_with_edge
-            && contains_red
+            && contains_target_color
             && min_distance <= BALL_RADIUS + SPEED / 2.0
             && min_distance >= BALL_RADIUS - SPEED / 2.0
         {
