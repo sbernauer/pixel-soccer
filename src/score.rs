@@ -56,7 +56,7 @@ impl Score {
     async fn update_draw_commands(&self) {
         let mut draw_commands = image_helpers::draw_text_with_background(
             20,
-            300,
+            170,
             100,
             54,
             60.0,
@@ -66,8 +66,8 @@ impl Score {
             &self.font,
         );
         draw_commands.extend(image_helpers::draw_text_with_background(
-            1798,
-            300,
+            1158,
+            170,
             100,
             54,
             60.0,

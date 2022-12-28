@@ -15,7 +15,7 @@ pub struct Field {
 
 impl Field {
     pub fn new() -> Self {
-        let image = ImageReader::open("images/field_v3.png")
+        let image = ImageReader::open("images/field_v3_1280.png")
             .unwrap()
             .decode()
             .unwrap();

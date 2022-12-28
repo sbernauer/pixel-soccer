@@ -51,6 +51,8 @@ impl Client {
     pub async fn read_commands(
         &mut self,
         number_of_commands: usize,
+        last_expected_x: u16,
+        last_expected_y: u16,
     ) -> Result<Vec<PixelflutResponse>> {
         let mut result = Vec::new();
         for _ in 0..number_of_commands {
@@ -79,6 +81,10 @@ impl Client {
                     )
                     .unwrap();
                     result.push(PixelflutResponse::Pixel { x, y, rgb });
+
+                    if x == last_expected_x && y == last_expected_y {
+                        break;
+                    }
                 }
                 Some("SIZE") => {
                     let width = parts
@@ -103,7 +109,7 @@ impl Client {
 
     pub async fn get_screen_size(&mut self) -> Result<(u16, u16)> {
         self.write_commands(&[PixelflutRequest::GetSize]).await?;
-        let response = self.read_commands(1).await?;
+        let response = self.read_commands(1, 0, 0).await?;
 
         if let Some(PixelflutResponse::Size { width, height }) = response.get(0) {
             Ok((*width, *height))
@@ -125,9 +131,15 @@ impl Client {
         screen_height: u16,
     ) -> Result<Vec<Vec<u32>>> {
         let mut read_commands = Vec::with_capacity(width as usize * height as usize);
+
+        let mut last_read_command_x = 0;
+        let mut last_read_command_y = 0;
+
         for x in x_offset..x_offset + width as i16 {
             for y in y_offset..y_offset + height as i16 {
                 if x >= 0 && x < screen_width as i16 && y >= 0 && y < screen_height as i16 {
+                    last_read_command_x = x as u16;
+                    last_read_command_y = y as u16;
                     read_commands.push(PixelflutRequest::GetPixel {
                         x: x as u16,
                         y: y as u16,
@@ -138,7 +150,7 @@ impl Client {
         self.write_commands(&read_commands).await?;
 
         let mut result = vec![vec![0_u32; height as usize]; width as usize];
-        let responses = self.read_commands(read_commands.len()).await?;
+        let responses = self.read_commands(read_commands.len(), last_read_command_x, last_read_command_y).await?;
         for response in responses {
             match response {
                 PixelflutResponse::Pixel { x, y, rgb } => {
@@ -169,6 +181,9 @@ impl Client {
             vec![vec![0_u32; 2 * outer_circle_radius as usize]; 2 * outer_circle_radius as usize];
         let mut read_commands = Vec::new();
 
+        let mut last_read_command_x = 0;
+        let mut last_read_command_y = 0;
+
         let donut_coordinates = get_donut_coordinates(
             x_center,
             y_center,
@@ -190,20 +205,26 @@ impl Client {
                 }
             }
 
+            last_read_command_x = x;
+            last_read_command_y = y;
             read_commands.push(PixelflutRequest::GetPixel {
-                x: x as u16,
-                y: y as u16,
+                x,
+                y,
             });
         }
 
         self.write_commands(&read_commands).await?;
 
-        let responses = self.read_commands(read_commands.len()).await?;
+        let responses = self.read_commands(read_commands.len(), last_read_command_x, last_read_command_y).await?;
         for response in responses {
             match response {
                 PixelflutResponse::Pixel { x, y, rgb } => {
-                    result[(x as i16 - x_center + outer_circle_radius as i16) as usize]
-                        [(y as i16 - y_center + outer_circle_radius as i16) as usize] = rgb;
+                    let x = (x as i16 - x_center + outer_circle_radius as i16) as usize;
+                    let y = (y as i16 - y_center + outer_circle_radius as i16) as usize;
+
+                    if x < result.len() && y < result.len() {
+                        result[x][y] = rgb;
+                    }
                 }
                 _ => panic!("Expected to get the color of a pixel, but got {response:?}"),
             }

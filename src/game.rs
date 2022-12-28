@@ -22,6 +22,7 @@ impl Game {
     pub async fn new(server_address: &str) -> Result<Self> {
         let mut client = Client::new(server_address).await?;
         let (screen_width, screen_height) = client.get_screen_size().await.unwrap();
+        println!("Detected screen size {screen_width} x {screen_height}");
 
         let ball = Ball::new(screen_width, screen_height).await?;
 
@@ -71,7 +72,7 @@ impl Game {
         }));
 
         threads.extend(draw::start_drawing(ball_2, server_address, 1).await);
-        threads.extend(draw::start_drawing(field, server_address, 1).await);
+        threads.extend(draw::start_drawing(field, server_address, 3).await);
         threads.extend(draw::start_drawing(score_2, server_address, 1).await);
 
         for thread in threads {

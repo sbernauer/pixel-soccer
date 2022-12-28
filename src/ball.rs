@@ -48,7 +48,7 @@ impl Ball {
             .decode()
             .expect("Failed to decode ball image");
 
-        let field_hitbox_image = ImageReader::open("images/field_v3_hitbox.png")?
+        let field_hitbox_image = ImageReader::open("images/field_v3_1280_hitbox.png")?
             .decode()
             .expect("Failed to decode field hitbox image");
 
